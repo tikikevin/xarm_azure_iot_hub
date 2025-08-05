@@ -3,3 +3,4 @@ src/python/Include/
 src/python/Lib/
 src/python/Scripts/
 src/python/pyvenv.cfg
+src/python/_helper.py

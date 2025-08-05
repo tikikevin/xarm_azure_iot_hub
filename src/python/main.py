@@ -149,7 +149,23 @@ async def handle_methods(client, serial_lock):
                 serial_msg = f"{method_name}:{payload}\n"
                 ser_conn.write(serial_msg.encode())
 
-                arduino_response = ser_conn.readline().decode('utf-8').strip()
+                # arduino_response = ser_conn.readline().decode('utf-8').strip() :: removed to handle timeout
+
+                # Wait up to 10 seconds for a response
+                timeout = 10
+                start_time = time.time()
+                arduino_response = ""
+
+                while time.time() - start_time < timeout:
+                    if ser_conn.in_waiting:
+                        arduino_response = ser_conn.readline().decode('utf-8').strip()
+                        if arduino_response:
+                            break
+                    await asyncio.sleep(0.1)  # avoid busy waiting
+
+                if not arduino_response:
+                    arduino_response = "⚠️ No response from Arduino within timeout."
+
                 print(f"📬 Arduino replied: {arduino_response}")
 
             status = 200

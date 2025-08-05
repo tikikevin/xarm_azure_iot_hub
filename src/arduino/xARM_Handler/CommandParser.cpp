@@ -32,12 +32,12 @@ void processSerialCommands() {
     snprintf(response, sizeof(response), "put_block %d: %s", point, ok?"true":"false");
 
   // GET COLOR
-  } else if (cmd == "get_color") {
+  } else if (cmd.startsWith("get_color")) {
     String c = getCurrentBlockColor();
     snprintf(response, sizeof(response), "get_color %s : %s", c);
 
   // HOLDING BLOCK
-  } else if (cmd == "holding_block") {
+  } else if (cmd.startsWith("holding_block")) {
     putBlockHoldingCheck();
     bool holding = checkIfHoldingBlock();
     if(holding == true){
@@ -52,7 +52,7 @@ void processSerialCommands() {
     snprintf(response, sizeof(response), "block_exists %d : %s", point, exists?"true":"false");
 
   // SCAN ROW
-  } else if (cmd == "scan_row") {
+  } else if (cmd.startsWith( "scan_row")) {
     int pos = scanBlockRow();
     snprintf(response, sizeof(response), "scan_row %d : %s", pos);
 

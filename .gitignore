@@ -1,0 +1,5 @@
+src/python/__pycache__/
+src/python/Include/
+src/python/Lib/
+src/python/Scripts/
+src/python/pyvenv.cfg

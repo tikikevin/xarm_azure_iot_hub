@@ -42,6 +42,15 @@ async def get_serial() -> serial.Serial:
             print(f"⏳ Retrying in {delay} seconds...")
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)  # exponential backoff up to 30s
+        from mcp_handler import handle_natural_language_command
+
+        print("xARM AI Handler (MCP Integration)")
+        while True:
+            cmd = input("Enter a natural language command for xARM (or 'exit' to quit): ")
+            if cmd.lower() == 'exit':
+                break
+            result = handle_natural_language_command(cmd)
+            print(f"Interpreted command: {result}")
     return ser
 
 # Function to send telemetry data from Arduino to Azure IoT Hub
@@ -136,6 +145,7 @@ async def handle_methods(client, serial_lock):
     Returns:
         None. The function runs indefinitely, processing incoming method requests.
     """
+    import time
     while True:
         method_request = await client.receive_method_request()
         method_name = method_request.name
@@ -149,7 +159,24 @@ async def handle_methods(client, serial_lock):
                 serial_msg = f"{method_name}:{payload}\n"
                 ser_conn.write(serial_msg.encode())
 
-                arduino_response = ser_conn.readline().decode('utf-8').strip()
+                # arduino_response = ser_conn.readline().decode('utf-8').strip() :: removed to handle timeout
+
+                # Wait up to 30 seconds for a response — robot arm movements
+                # can take 10-20+ seconds for physical actions like get_block
+                timeout = 30
+                start_time = time.time()
+                arduino_response = ""
+
+                while time.time() - start_time < timeout:
+                    if ser_conn.in_waiting:
+                        arduino_response = ser_conn.readline().decode('utf-8').strip()
+                        if arduino_response:
+                            break
+                    await asyncio.sleep(0.1)  # avoid busy waiting
+
+                if not arduino_response:
+                    arduino_response = "⚠️ No response from Arduino within timeout."
+
                 print(f"📬 Arduino replied: {arduino_response}")
 
             status = 200

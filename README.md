@@ -17,6 +17,7 @@ It handles Azure Direct Method calls, translates them into serial primitives for
 - [Supported Direct Methods](#supported-direct-methods)  
 - [Module Guide](#module-guide)  
 - [Extending & Adding Handlers](#extending--adding-handlers)  
+- [Arduino Serial Commands](#arduino-serial-commands)  
 - [Contributing](#contributing)  
 - [License](#license)  
 
@@ -150,6 +151,9 @@ python main.py
 | `getBlockColor`  | `point` (int)                           | Returns the color of the block at `point`.     |
 | `checkOccupancy` | `point` (int)                           | Returns whether a block is present at `point`. |
 
+> **Note:** Direct methods are translated by the Python edge app into serial commands for the Arduino.  
+> For the full list of low-level serial commands the Arduino accepts, see [docs/arduino-commands.md](docs/arduino-commands.md).
+
 **Request Envelope**  
 ```json
 {
@@ -204,6 +208,31 @@ python main.py
 
 - **`azure_client.py`**  
   Creates a singleton IoT Hub client used by both `main.py` and `twin_cloud.py`.
+
+---
+
+## Arduino Serial Commands
+
+The Arduino firmware accepts the following commands over serial (9600 baud):
+
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `get_block <pos>` | Position 1–9 | Pick up a block from a grid position |
+| `put_block <pos>` | Position 1–9 | Place the held block at a grid position |
+| `get_color` | *(none)* | Read the color of the block at the color sensor |
+| `holding_block` | *(none)* | Check if the arm is currently holding a block |
+| `block_exists <pos>` | Position 1–3 | Check if a block is present (via limit switch) |
+| `scan_row` | *(none)* | Ultrasonic scan of far row to find block position |
+
+**Grid layout:**
+```
+ [4] [5] [6]   ← Far row (ultrasonic)
+ [1] [2] [3]   ← Near row (limit switches)
+ [7] [8] [9]   ← Storage row
+     ARM
+```
+
+For full protocol details, hardware wiring, action group mappings, and response formats, see **[docs/arduino-commands.md](docs/arduino-commands.md)**.
 
 ---
 

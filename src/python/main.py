@@ -1,9 +1,11 @@
 import serial
 import asyncio
 import json
+import time
 from helper import SERIAL_PORT, BAUD_RATE, CONNECTION_STRING
 from azure.iot.device.aio import IoTHubDeviceClient
 from azure.iot.device import Message, MethodResponse
+from twin_manager import TwinManager
 
 ser = None  # Global variable for serial connection
 
@@ -122,21 +124,17 @@ async def receive_c2d_messages(client, serial_lock):
         await asyncio.sleep(0.5)  # Poll every 500ms
 
 
-async def handle_methods(client, serial_lock):
+async def handle_methods(client, serial_lock, twin_manager: TwinManager):
     """
     Handles direct method requests from Azure IoT Hub, sends the requested command to an Arduino device via serial communication,
-    and returns the Arduino's response back to Azure IoT Hub.
-    This function runs in an infinite loop, asynchronously waiting for method requests from the Azure IoT client. Upon receiving a request,
-    it acquires a serial lock to ensure exclusive access to the serial connection, sends the method name and payload to the Arduino,
-    reads the response, and sends the result back to Azure IoT. If an error occurs during communication, it handles the exception,
-    closes the serial connection if necessary, and returns an error response.
+    and returns the Arduino's response back to Azure IoT Hub. Updates the digital twin after each command.
     Args:
         client: The Azure IoT client instance used to receive and respond to method requests.
         serial_lock: An asyncio-compatible lock to ensure exclusive access to the serial connection.
+        twin_manager: TwinManager instance for updating reported properties.
     Returns:
         None. The function runs indefinitely, processing incoming method requests.
     """
-    import time
     while True:
         method_request = await client.receive_method_request()
         method_name = method_request.name
@@ -144,13 +142,14 @@ async def handle_methods(client, serial_lock):
 
         print(f"⚙️ Received direct method: {method_name}, payload: {payload}")
 
+        # Mark arm as busy
+        twin_manager.set_arm_state("busy")
+
         try:
             async with serial_lock:
                 ser_conn = await get_serial()
                 serial_msg = f"{method_name}:{payload}\n"
                 ser_conn.write(serial_msg.encode())
-
-                # arduino_response = ser_conn.readline().decode('utf-8').strip() :: removed to handle timeout
 
                 # Wait up to 30 seconds for a response — robot arm movements
                 # can take 10-20+ seconds for physical actions like get_block
@@ -172,6 +171,10 @@ async def handle_methods(client, serial_lock):
 
             status = 200
             response_payload = {"result": arduino_response}
+
+            # Update twin state based on command result
+            twin_manager.update_from_command(method_name, str(payload) if payload else "", arduino_response)
+
         except Exception as e:
             print(f"❌ Method handler error: {e}")
             if ser_conn: ser_conn.close()
@@ -179,6 +182,10 @@ async def handle_methods(client, serial_lock):
             ser = None
             status = 500
             response_payload = {"error": str(e)}
+
+        # Mark arm as idle and push twin update
+        twin_manager.set_arm_state("idle")
+        await twin_manager.push_twin_update()
 
         method_response = MethodResponse.create_from_method_request(
             method_request, status, response_payload
@@ -189,18 +196,10 @@ async def handle_methods(client, serial_lock):
 async def main():
     """
     Main entry point for the application.
-    This asynchronous routine initializes the Azure IoT Hub device client, establishes a connection,
-    and sets up a serial lock for thread-safe serial port access. It then concurrently runs the
-    telemetry sending, cloud-to-device message receiving, and direct method handling routines.
-    Responsibilities:
-    - Connects to Azure IoT Hub using the provided connection string.
-    - Initializes an asyncio lock for serial port operations.
-    - Launches telemetry sending, C2D message receiving, and method handling tasks concurrently.
-    This function should be called to start the main application workflow.
+    Initializes the Azure IoT Hub device client, digital twin manager,
+    and launches all concurrent tasks: telemetry, C2D messages, direct methods,
+    and periodic sensor polling.
     """
-    # Open serial port and create lock inside main
-    # ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
-    
     # Create IoT Hub device client
     device_client = IoTHubDeviceClient.create_from_connection_string(CONNECTION_STRING)
     print("🔌 Connecting to Azure IoT Hub...")
@@ -210,11 +209,18 @@ async def main():
     # Create serial lock in the correct event loop context
     serial_lock = asyncio.Lock()
 
+    # Create twin manager
+    twin_mgr = TwinManager(device_client, serial_lock, get_serial)
+
+    # Register desired properties handler (allows cloud to adjust poll interval)
+    device_client.on_twin_desired_properties_patch_received = twin_mgr.handle_desired_properties
+
     # Run all handlers concurrently
     await asyncio.gather(
         send_telemetry(device_client, serial_lock),
         receive_c2d_messages(device_client, serial_lock),
-        handle_methods(device_client, serial_lock)
+        handle_methods(device_client, serial_lock, twin_mgr),
+        twin_mgr.run_periodic_poll(),
     )
 
 if __name__ == "__main__":

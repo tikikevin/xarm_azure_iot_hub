@@ -34,7 +34,7 @@ void processSerialCommands() {
   // GET COLOR
   } else if (cmd == "get_color") {
     String c = getCurrentBlockColor();
-    snprintf(response, sizeof(response), "get_color %s : %s", c);
+    snprintf(response, sizeof(response), "get_color %s", c);
 
   // HOLDING BLOCK
   } else if (cmd == "holding_block") {
@@ -54,10 +54,10 @@ void processSerialCommands() {
   // SCAN ROW
   } else if (cmd == "scan_row") {
     int pos = scanBlockRow();
-    snprintf(response, sizeof(response), "scan_row %d : %s", pos);
+    snprintf(response, sizeof(response), "scan_row %d", pos);
 
   } else {
-    snprintf(response, sizeof(response), "command unknown");
+    snprintf(response, sizeof(response), "command unknown : %s", cmd);
   }
 
   // Print response to Python and local display

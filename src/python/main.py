@@ -161,8 +161,9 @@ async def handle_methods(client, serial_lock):
 
                 # arduino_response = ser_conn.readline().decode('utf-8').strip() :: removed to handle timeout
 
-                # Wait up to 10 seconds for a response
-                timeout = 10
+                # Wait up to 30 seconds for a response — robot arm movements
+                # can take 10-20+ seconds for physical actions like get_block
+                timeout = 30
                 start_time = time.time()
                 arduino_response = ""
 

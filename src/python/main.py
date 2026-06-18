@@ -42,15 +42,6 @@ async def get_serial() -> serial.Serial:
             print(f"⏳ Retrying in {delay} seconds...")
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)  # exponential backoff up to 30s
-        from mcp_handler import handle_natural_language_command
-
-        print("xARM AI Handler (MCP Integration)")
-        while True:
-            cmd = input("Enter a natural language command for xARM (or 'exit' to quit): ")
-            if cmd.lower() == 'exit':
-                break
-            result = handle_natural_language_command(cmd)
-            print(f"Interpreted command: {result}")
     return ser
 
 # Function to send telemetry data from Arduino to Azure IoT Hub
